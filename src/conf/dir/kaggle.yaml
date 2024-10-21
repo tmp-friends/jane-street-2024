@@ -1,0 +1,4 @@
+data_dir: /kaggle/input/jane-street-real-time-market-data-forecasting
+output_dir: /kaggle/working/output
+model_dir: /kaggle/input/jane-street-models
+sub_dir: /kaggle/working

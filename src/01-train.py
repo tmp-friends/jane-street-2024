@@ -7,6 +7,7 @@ from tqdm import tqdm
 import hydra
 
 import numpy as np
+import pyarrow.parquet as pq
 import pandas as pd
 from matplotlib import pyplot as plt
 
@@ -16,9 +17,12 @@ from conf.type import TrainConfig
 
 @hydra.main(config_path="conf", config_name="train", version_base="1.1")
 def main(cfg: TrainConfig):
-    LOGGER.info("hoge")
-
-    # Load meta
+    # Load data
+    data_dir = os.path.join(cfg.dir.data_dir, "train.parquet")
+    dataset = pq.ParquetDataset(data_dir)
+    table = dataset.read()
+    df = table.to_pandas()
+    print(df)
 
     # Create fold
 
@@ -33,7 +37,9 @@ def main(cfg: TrainConfig):
 
 if __name__ == "__main__":
     # Logger
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s:%(name)s - %(message)s"
+    )
     LOGGER = logging.getLogger(Path(__file__).name)
 
     # For descriptive error messages

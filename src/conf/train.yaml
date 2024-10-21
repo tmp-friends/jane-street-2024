@@ -8,8 +8,8 @@ hydra:
 
 defaults:
   - _self_
-  - dir: dir
-  - model: Hoge
+  - dir: local
+  - model: mlp
 
 n_folds: 5
 fold: 0

@@ -1,0 +1,4 @@
+data_dir: /home/tomoya/kaggle/jane-street-2024/input/jane-street-real-time-market-data-forecasting
+output_dir: /home/tomoya/kaggle/jane-street-2024/output
+model_dir: /home/tomoya/kaggle/jane-street-2024/output/models
+sub_dir: ./

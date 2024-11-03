@@ -24,6 +24,10 @@ class TrainConfig:
     valid_batch_size: int
     scheduler: str
     lr: float
+    min_lr: float
+    T_max: int
+    # weight_decay: float
+    n_accumulates: int
 
 
 @dataclass

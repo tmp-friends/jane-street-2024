@@ -36,4 +36,4 @@ class InferConfig:
     model: ModelConfig
     n_folds: int
     model_dir: str
-    valid_batch_size: int
+    test_batch_size: int

@@ -19,6 +19,6 @@ valid_batch_size: 4096
 scheduler: "CosineAnnealingLR"
 lr: 1e-4
 min_lr: 1e-6
-T_max: 500
+T_max: 100
 n_accumulates: 1
 

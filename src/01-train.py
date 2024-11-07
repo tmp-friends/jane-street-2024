@@ -395,23 +395,23 @@ def main(cfg: TrainConfig):
             best_epoch_r2 = valid_epoch_r2
             best_model_wts = copy.deepcopy(model.state_dict())
 
-        # Save a model file from the current directory
-        model_filename = "R2{:.4f}_Loss{:.4f}_epoch{:.0f}.bin".format(
-            best_epoch_r2, best_epoch_loss, best_epoch
-        )
-        torch.save(best_model_wts, model_filename)
-        LOGGER.info("Model saved")
+    # Save a model file from the current directory
+    model_filename = "R2{:.4f}_Loss{:.4f}_epoch{:.0f}.bin".format(
+        best_epoch_r2, best_epoch_loss, best_epoch
+    )
+    torch.save(best_model_wts, model_filename)
+    LOGGER.info("Model saved")
 
-        end = time.time()
-        time_elapsed = end - start
-        LOGGER.info(
-            "Training complete in {:.0f}h {:.0f}m {:.0f}s".format(
-                time_elapsed // 3600,
-                (time_elapsed % 3600) // 60,
-                (time_elapsed % 3600) % 60,
-            )
+    end = time.time()
+    time_elapsed = end - start
+    LOGGER.info(
+        "Training complete in {:.0f}h {:.0f}m {:.0f}s".format(
+            time_elapsed // 3600,
+            (time_elapsed % 3600) // 60,
+            (time_elapsed % 3600) % 60,
         )
-        LOGGER.info("Best R2: {:.4f}".format(best_epoch_r2))
+    )
+    LOGGER.info("Best R2: {:.4f}".format(best_epoch_r2))
 
     # Monitor
     save_history(history=history)

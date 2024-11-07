@@ -27,7 +27,7 @@ class MLP(nn.Module):
 
         self.dense5 = nn.Linear(394, 1)
 
-        # self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
         # self.prelu = nn.PReLU()
         # self.leaky_relu = nn.LeakyReLU(nagative_slope=0.01, inplace=True)
         # self.gelu = nn.GELU()
@@ -39,22 +39,22 @@ class MLP(nn.Module):
 
         x = self.dense1(x)
         x = self.batch_norm1(x)
-        x = x * F.sigmoid(x)
+        x = self.relu(x)
         x = self.dropout1(x)
 
         x = self.dense2(x)
         x = self.batch_norm2(x)
-        x = x * F.sigmoid(x)
+        x = self.relu(x)
         x = self.dropout2(x)
 
         x = self.dense3(x)
         x = self.batch_norm3(x)
-        x = x * F.sigmoid(x)
+        x = self.relu(x)
         x = self.dropout3(x)
 
         x = self.dense4(x)
         x = self.batch_norm4(x)
-        x = x * F.sigmoid(x)
+        x = self.relu(x)
         x = self.dropout4(x)
 
         x = self.dense5(x)

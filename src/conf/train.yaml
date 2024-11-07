@@ -13,7 +13,7 @@ defaults:
 
 n_folds: 5
 fold: 0
-n_epochs: 1
+n_epochs: 10
 train_batch_size: 4096
 valid_batch_size: 4096
 scheduler: "CosineAnnealingLR"

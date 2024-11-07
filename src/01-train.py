@@ -14,7 +14,7 @@ import pyarrow.parquet as pq
 import pandas as pd
 import polars as pl
 from matplotlib import pyplot as plt
-from sklearn.model_selection import KFold, GroupKFold
+from sklearn.model_selection import GroupKFold
 from sklearn.preprocessing import StandardScaler
 import torch
 import torch.nn as nn
@@ -302,13 +302,12 @@ def main(cfg: TrainConfig):
         // cfg.n_folds
     )
 
-    kf = KFold(n_splits=cfg.n_folds)
-    # gkf = GroupKFold(n_splits=cfg.n_folds)
+    gkf = GroupKFold(n_splits=cfg.n_folds)
     for i, (train_ix, valid_ix) in enumerate(
-        kf.split(
+        gkf.split(
             X=df[feature_cols],
             y=df[target_col],
-            # groups=df["date_id"],
+            groups=df["date_id"],
         )
     ):
         df.loc[valid_ix, "fold"] = int(i)

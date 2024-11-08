@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy==1.26.4",
     "pandas==2.2.1",
-    "polars==0.20.31",
+    "polars==1.9.0",
     "pyarrow==16.1.0",
     "scikit-learn==1.2.0",
     "imbalanced-learn==0.12.3",

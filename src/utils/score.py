@@ -15,11 +15,6 @@ def score_weighted_r2(
     Returns:
         float: The weighted zero-mean R-squared score.
     """
-    # 一次元テンソルに変換
-    y_true = y_true.view(-1)
-    y_pred = y_pred.view(-1)
-    weights = weights.view(-1)
-
     numerator = torch.sum(weights * (y_true - y_pred) ** 2)
     denominator = torch.sum(weights * y_true**2)
 

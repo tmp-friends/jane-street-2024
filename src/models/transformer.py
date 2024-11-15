@@ -4,8 +4,12 @@ from torch import nn
 from models.modules import GaussianNoise
 
 
-class LSTM(nn.Module):
-    """ref: https://www.kaggle.com/code/tarriaza/basic-pytorch-lstm"""
+class Transformer(nn.Module):
+    """
+    ref:
+    - Ubiquant Market Prediction 3rd place solution: https://www.kaggle.com/competitions/ubiquant-market-prediction/discussion/338561
+    - torchでのmodule: https://pytorch.org/docs/stable/generated/torch.nn.Transformer.html
+    """
 
     def __init__(
         self, input_size: int, hidden_dim: int, output_size: int, num_layers: int
@@ -15,26 +19,21 @@ class LSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.noise = GaussianNoise(std=0.1)
-        self.lstm = nn.LSTM(
+        self.transfomer = nn.Transformer(
             input_size=input_size,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
         )
         self.fc = nn.Linear(in_features=hidden_dim, out_features=output_size)
-        self.tanh = nn.Tanh()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # 系列長が1なので、LSTMの性能を引き出せていない
         x = x.unsqueeze(1)
-
         x = self.noise(x)
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).to(x.device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).to(x.device)
 
         out, _ = self.lstm(x, (h0, c0))
         out = self.fc(out[:, -1, :])
-
-        out = 5 * self.tanh(out)  # [-5, 5]
 
         return out.squeeze()

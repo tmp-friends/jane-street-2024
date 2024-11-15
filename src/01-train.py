@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import polars as pl
 from matplotlib import pyplot as plt
-from sklearn.model_selection import GroupKFold
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,6 +25,7 @@ from utils.utils import set_seed, reduce_mem_usage
 from utils.score import score_weighted_r2
 from datasets.market_dataset import MarketDataset
 from models.mlp import MLP
+from models.autoencoder import AutoEncoder
 from models.lstm import LSTM
 
 # 全データの平均と分散
@@ -213,41 +213,9 @@ def fetch_scheduler(cfg: TrainConfig, optimizer: optim) -> lr_scheduler:
     return scheduler
 
 
-from torch.nn.modules.loss import _WeightedLoss
-
-
-class SmoothMSELoss(_WeightedLoss):
-    def __init__(self, weight=None, reduction="mean", smoothing=0.0):
-        super().__init__(weight=weight, reduction=reduction)
-        self.smoothing = smoothing
-        self.weight = weight
-        self.reduction = reduction
-
-    @staticmethod
-    def _smooth(targets: torch.Tensor, smoothing=0.0):
-        assert 0 <= smoothing < 1
-        with torch.no_grad():
-            targets = targets * (1.0 - smoothing) + targets.mean() * smoothing
-        return targets
-
-    def forward(self, inputs, targets):
-        targets = SmoothMSELoss._smooth(targets, self.smoothing)
-        loss = (inputs - targets) ** 2
-
-        if self.weight is not None:
-            loss = loss * self.weight
-
-        if self.reduction == "sum":
-            loss = loss.sum()
-        elif self.reduction == "mean":
-            loss = loss.mean()
-
-        return loss
-
-
 def criterion(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    return nn.MSELoss()(outputs, targets)
-    # return SmoothMSELoss(smoothing=0.1)(outputs, targets)
+    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
+    return nn.MSELoss(reduction="none")(outputs, targets)
 
 
 def train_one_epoch(
@@ -339,7 +307,7 @@ def valid_one_epoch(
 
         batch_size = x.size(0)
 
-        outputs = model(x).squeeze()
+        outputs = model(x)
 
         loss_per_sample = criterion(outputs, y)
         weighted_loss = loss_per_sample * weight
@@ -488,7 +456,8 @@ def main(cfg: TrainConfig):
     )
 
     # Def model
-    model = MLP(features=feature_cols)
+    # model = MLP(features=feature_cols)
+    model = AutoEncoder(features=feature_cols)
     # model = LSTM(input_size=79, hidden_dim=512, output_size=1, num_layers=1)
     model.to(device=device)
 

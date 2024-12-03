@@ -374,7 +374,10 @@ def main(cfg: TrainConfig):
     """
     # Load data
     df: pl.LazyFrame = pl.scan_parquet(os.path.join(cfg.dir.data_dir, "train.parquet"))
-    df = df.filter(pl.col("date_id") >= 1455)  # 1year に絞る
+    # ref: https://www.kaggle.com/code/motono0223/js24-preprocessing-create-lags
+    df = df.filter(pl.col("date_id") >= 1100)
+
+    # lags_df: pl.LazyFrame = pl.scan_parquet
 
     feature_cols = [v for v in df.collect_schema() if "feature" in v]
     target_col = "responder_6"
@@ -407,8 +410,12 @@ def main(cfg: TrainConfig):
     joblib.dump({"mean": features_mean, "std": features_std}, "scaler.pkl")
 
     df: pd.DataFrame = df.collect().to_pandas()
-    df = reduce_mem_usage(df)
+    # df = reduce_mem_usage(df)
     LOGGER.info(df)
+
+    valid_date_point = 1634
+    train_df = df[df["date_id"] < valid_date_point]
+    valid_df = df[df["date_id"] >= valid_date_point]
 
     cfg.T_max = (
         df.shape[0]
@@ -417,15 +424,6 @@ def main(cfg: TrainConfig):
         // cfg.train_batch_size
         // cfg.n_folds
     )
-
-    all_date_id = np.arange(df["date_id"].min(), df["date_id"].max() + 1)
-    valid_size = int(len(all_date_id) * 0.20)
-
-    train_date_id = all_date_id[:-valid_size]
-    valid_date_id = all_date_id[-valid_size:]
-
-    train_df = df[df["date_id"].isin(train_date_id)].reset_index(drop=True)
-    valid_df = df[df["date_id"].isin(valid_date_id)].reset_index(drop=True)
 
     # Create loaders
     train_dataset = MarketDataset(

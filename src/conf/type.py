@@ -16,9 +16,6 @@ class ModelConfig:
 @dataclass
 class TrainConfig:
     dir: DirConfig
-    model: ModelConfig
-    n_folds: int
-    fold: int
     n_epochs: int
     train_batch_size: int
     valid_batch_size: int

@@ -11,14 +11,12 @@ defaults:
   - dir: local
   - model: mlp
 
-n_epochs: 10
+n_epochs: 20
 train_batch_size: 4096
 valid_batch_size: 4096
 scheduler: "CosineAnnealingLR"
-# lr: 1e-3
-# min_lr: 1e-5
 lr: 1e-4
 min_lr: 1e-6
 T_max: 500
 n_accumulates: 1
-
+early_stopping_steps: 3

@@ -23,8 +23,8 @@ class TrainConfig:
     lr: float
     min_lr: float
     T_max: int
-    # weight_decay: float
     n_accumulates: int
+    early_stopping_steps: int
 
 
 @dataclass

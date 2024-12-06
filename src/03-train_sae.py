@@ -378,13 +378,13 @@ def save_history(history: dict) -> None:
     plt.savefig("plt-r2.png")
     plt.clf()
 
-    # plt.plot(range(history.shape[0]), history["lr"].values, label="lr")
-    # plt.xlabel("epochs")
-    # plt.ylabel("lr")
-    # plt.grid()
-    # plt.legend()
-    # plt.savefig("plt-lr.png")
-    # plt.clf()
+    plt.plot(range(history.shape[0]), history["lr"].values, label="lr")
+    plt.xlabel("epochs")
+    plt.ylabel("lr")
+    plt.grid()
+    plt.legend()
+    plt.savefig("plt-lr.png")
+    plt.clf()
 
 
 @hydra.main(config_path="conf", config_name="train", version_base="1.1")
@@ -480,6 +480,7 @@ def main(cfg: TrainConfig):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch_loss = -np.inf
     best_epoch_r2 = -np.inf
+    early_stopping_cnt = 0
 
     history = defaultdict(list)
     for epoch in range(1, cfg.n_epochs + 1):
@@ -510,9 +511,8 @@ def main(cfg: TrainConfig):
         history["Valid Loss"].append(valid_epoch_loss)
         history["Train R2"].append(train_epoch_r2)
         history["Valid R2"].append(valid_epoch_r2)
-        # history["lr"].append(scheduler.get_last_lr()[0])
+        history["lr"].append(scheduler.get_last_lr()[0])
 
-        # deep copy the model
         if best_epoch_r2 <= valid_epoch_r2:
             LOGGER.info(f"Val R2 Improved ({best_epoch_r2} ---> {valid_epoch_r2})")
 
@@ -520,6 +520,14 @@ def main(cfg: TrainConfig):
             best_epoch_loss = valid_epoch_loss
             best_epoch_r2 = valid_epoch_r2
             best_model_wts = copy.deepcopy(model.state_dict())
+
+            early_stopping_cnt = 0
+
+        else:
+            early_stopping_cnt += 1
+            if early_stopping_cnt >= cfg.early_stopping_steps:
+                LOGGER.info(f"Early stopping at Epoch {epoch}")
+                break
 
     # Save a model file from the current directory
     model_filename = "R2{:.4f}_Loss{:.4f}_epoch{:.0f}.bin".format(

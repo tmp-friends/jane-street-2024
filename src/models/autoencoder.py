@@ -58,12 +58,12 @@ class SupervisedAutoEncoder(nn.Module):
     ):
         super().__init__()
 
-        self.input_norm = nn.BatchNorm1d(num_features)
+        self.input_norm = nn.LayerNorm(num_features)
 
         # Encoder
         self.noise = GaussianNoise(std=0.1)
         self.encoder_dense = nn.Linear(num_features, hidden_units[0])
-        self.encoder_norm = nn.BatchNorm1d(hidden_units[0])
+        self.encoder_norm = nn.LayerNorm(hidden_units[0])
         self.encoder_activation = nn.SiLU()  # Swish
 
         # Decoder
@@ -72,7 +72,7 @@ class SupervisedAutoEncoder(nn.Module):
 
         # x_ae
         self.x_ae_dense = nn.Linear(num_features, hidden_units[1])
-        self.x_ae_norm = nn.BatchNorm1d(hidden_units[1])
+        self.x_ae_norm = nn.LayerNorm(hidden_units[1])
         self.x_ae_activation = nn.SiLU()
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
@@ -81,7 +81,7 @@ class SupervisedAutoEncoder(nn.Module):
 
         # x0 + Encoder
         concat_dim = num_features + hidden_units[0]
-        self.concat_norm = nn.BatchNorm1d(concat_dim)
+        self.concat_norm = nn.LayerNorm(concat_dim)
         self.concat_dropout = nn.Dropout(dropout_rates[3])
 
         # additional hidden layers
@@ -91,7 +91,7 @@ class SupervisedAutoEncoder(nn.Module):
             self.hidden_layers.extend(
                 [
                     nn.Linear(prev_dim, hidden_units[i]),
-                    # nn.BatchNorm1d(hidden_units[i]),
+                    nn.LayerNorm(hidden_units[i]),
                     nn.SiLU(),
                     nn.Dropout(dropout_rates[i + 2]),
                 ]
@@ -103,26 +103,25 @@ class SupervisedAutoEncoder(nn.Module):
         self.out_dense = nn.Linear(prev_dim, 1)
 
     def forward(self, x):
-        # x0 = self.input_norm(x)
-        x0 = x
+        x0 = self.input_norm(x)
 
         encoder = self.noise(x0)
         encoder = self.encoder_dense(encoder)
-        # encoder = self.encoder_norm(encoder)
+        encoder = self.encoder_norm(encoder)
         encoder = self.encoder_activation(encoder)
 
         decoder = self.decoder_dropout(encoder)
         decoder = self.decoder_dense(decoder)
 
         x_ae = self.x_ae_dense(decoder)
-        # x_ae = self.x_ae_norm(x_ae)
+        x_ae = self.x_ae_norm(x_ae)
         x_ae = self.x_ae_activation(x_ae)
         x_ae = self.x_ae_dropout(x_ae)
 
         out_ae = self.out_ae_dense(x_ae)
 
         x_concat = torch.cat([x0, encoder], dim=1)
-        # x_concat = self.concat_norm(x_concat)
+        x_concat = self.concat_norm(x_concat)
         x_concat = self.concat_dropout(x_concat)
 
         x_hidden = self.hidden_layers(x_concat)

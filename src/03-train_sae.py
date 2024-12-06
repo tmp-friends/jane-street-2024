@@ -251,21 +251,20 @@ def train_one_epoch(
 
         decoder, out_ae, out = model(x)
 
-        # 各損失を計算
-        loss_decoder = criterion_decoder(decoder, x)  # オートエンコーダの再構成損失
-        loss_ae_output = criterion_ae(out_ae, y)  # 中間出力の損失
-        loss_output = criterion(out, y)  # 最終出力の損失
+        # (batch_size, num_features) のため、num_featuresで平均をとる
+        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
+        loss_out_ae = criterion_ae(out_ae, y)  # (batch_size,)
+        loss = criterion(out, y)  # (batch_size,)
 
-        # loss_decoder の形状が (バッチサイズ, 入力次元数) の場合、サンプルごとに集約
-        loss_decoder = loss_decoder.mean(dim=1)  # 入力次元について平均
-
-        # 合計損失
-        loss = loss_decoder + loss_ae_output + loss_output
-        loss *= weight
-        loss = loss.mean()
+        loss_decoder = (weight * loss_decoder).mean()
+        loss_out_ae = (weight * loss_out_ae).mean()
+        loss = (weight * loss).mean()
 
         loss /= cfg.n_accumulates
 
+        # 同一の計算グラフから複数回 backward() を呼ぶと勾配が累積される
+        loss_decoder.backward(retain_graph=True)
+        loss_out_ae.backward(retain_graph=True)
         loss.backward()
 
         if (step + 1) % cfg.n_accumulates == 0:
@@ -325,18 +324,14 @@ def valid_one_epoch(
 
         decoder, out_ae, out = model(x)
 
-        # 各損失を計算
-        loss_decoder = criterion_decoder(decoder, x)  # オートエンコーダの再構成損失
-        loss_ae_output = criterion_ae(out_ae, y)  # 中間出力の損失
-        loss_output = criterion(out, y)  # 最終出力の損失
+        # (batch_size, num_features) のため、num_featuresで平均をとる
+        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
+        loss_out_ae = criterion_ae(out_ae, y)  # (batch_size,)
+        loss = criterion(out, y)  # (batch_size,)
 
-        # loss_decoder の形状が (バッチサイズ, 入力次元数) の場合、サンプルごとに集約
-        loss_decoder = loss_decoder.mean(dim=1)  # 入力次元について平均
-
-        # 合計損失
-        loss = loss_decoder + loss_ae_output + loss_output
-        loss *= weight
-        loss = loss.mean()
+        loss_decoder = (weight * loss_decoder).mean()
+        loss_out_ae = (weight * loss_out_ae).mean()
+        loss = (weight * loss).mean()
 
         running_loss += loss.item() * batch_size
         dataset_size += batch_size

@@ -9,7 +9,6 @@ hydra:
 defaults:
   - _self_
   - dir: local
-  - model: mlp
 
 n_epochs: 20
 train_batch_size: 4096

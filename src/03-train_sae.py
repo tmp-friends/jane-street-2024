@@ -235,6 +235,10 @@ def main(cfg: TrainConfig):
 
     df: pl.LazyFrame = pl.scan_parquet(os.path.join(cfg.dir.data_dir, "train.parquet"))
 
+    tags_df = pl.read_csv(os.path.join(cfg.dir.data_dir, "features.csv"))
+    tags_array = tags_df.drop("feature").to_pandas().values.astype(np.float32)
+    tags_tensor = torch.from_numpy(tags_array)
+
     #####################
     # Feature engineering
     #####################
@@ -257,7 +261,9 @@ def main(cfg: TrainConfig):
     # Preprocessing
     #####################
 
-    feature_cols = [v for v in df.collect_schema() if ("feature" in v) or ("lag" in v)]
+    feature_cols = [v for v in df.collect_schema() if "feature" in v]
+    lag_cols = [v for v in df.collect_schema() if "lag" in v]
+    all_feature_cols = feature_cols + lag_cols
     target_col = "responder_6"
     weight_col = "weight"
 
@@ -271,20 +277,20 @@ def main(cfg: TrainConfig):
 
     # train の特徴量の平均と分散の算出
     features_mean_df = (
-        train_df.select([pl.col(v).mean().alias(v) for v in feature_cols])
+        train_df.select([pl.col(v).mean().alias(v) for v in all_feature_cols])
         .collect()
         .row(0)
     )
-    features_mean = {v: features_mean_df[i] for i, v in enumerate(feature_cols)}
+    features_mean = {v: features_mean_df[i] for i, v in enumerate(all_feature_cols)}
     del features_mean_df
     gc.collect()
 
     features_std_df = (
-        train_df.select([pl.col(v).std().alias(v) for v in feature_cols])
+        train_df.select([pl.col(v).std().alias(v) for v in all_feature_cols])
         .collect()
         .row(0)
     )
-    features_std = {v: features_std_df[i] for i, v in enumerate(feature_cols)}
+    features_std = {v: features_std_df[i] for i, v in enumerate(all_feature_cols)}
     del features_std_df
     gc.collect()
 
@@ -296,13 +302,13 @@ def main(cfg: TrainConfig):
     train_df = train_df.with_columns(
         [
             ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in feature_cols
+            for v in all_feature_cols
         ]
     )
     valid_df = valid_df.with_columns(
         [
             ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in feature_cols
+            for v in all_feature_cols
         ]
     )
 
@@ -319,13 +325,13 @@ def main(cfg: TrainConfig):
     # Create loaders
     train_dataset = MarketDataset(
         df=train_df,
-        feature_cols=feature_cols,
+        feature_cols=all_feature_cols,
         target_col=target_col,
         weight_col=weight_col,
     )
     valid_dataset = MarketDataset(
         df=valid_df,
-        feature_cols=feature_cols,
+        feature_cols=all_feature_cols,
         target_col=target_col,
         weight_col=weight_col,
     )
@@ -345,7 +351,9 @@ def main(cfg: TrainConfig):
     )
 
     # Def model
-    model = SupervisedAutoEncoder(num_features=len(feature_cols))
+    model = SupervisedAutoEncoder(
+        num_features=len(feature_cols), num_lag_features=len(lag_cols), tags=tags_tensor
+    )
     model.to(device=device)
 
     optimizer = optim.Adam(model.parameters(), lr=cfg.lr)

@@ -44,8 +44,10 @@ class SupervisedAutoEncoder(nn.Module):
     def __init__(
         self,
         num_features: int,
-        hidden_units: [int] = [96, 96, 896, 448, 448, 256],
-        dropout_rates: [int] = [
+        num_lag_features: int,
+        tags: list[float] | None = None,  # (num_features, num_tags)
+        hidden_units: list[int] = [96, 96, 896, 448, 448, 256],
+        dropout_rates: list[int] = [
             0.03527936123679956,
             0.038424974585075086,
             0.42409238408801436,
@@ -58,17 +60,27 @@ class SupervisedAutoEncoder(nn.Module):
     ):
         super().__init__()
 
+        self.num_features = num_features
+        num_all_features = num_features + num_lag_features
+
+        if tags is not None:
+            # 学習不要パラメータとして登録
+            self.register_buffer("tags", tags)
+            num_input_features = num_features * (1 + tags.shape[1]) + num_lag_features
+        else:
+            num_input_features = num_all_features
+
         # Encoder
         self.noise = GaussianNoise(std=0.035)
-        self.encoder_dense = nn.Linear(num_features, hidden_units[0])
+        self.encoder_dense = nn.Linear(num_input_features, hidden_units[0])
         self.encoder_activation = nn.SiLU()  # Swish
 
         # Decoder
         self.decoder_dropout = nn.Dropout(dropout_rates[1])
-        self.decoder_dense = nn.Linear(hidden_units[0], num_features)
+        self.decoder_dense = nn.Linear(hidden_units[0], num_all_features)
 
         # x_ae
-        self.x_ae_dense = nn.Linear(num_features, hidden_units[1])
+        self.x_ae_dense = nn.Linear(num_all_features, hidden_units[1])
         self.x_ae_activation = nn.SiLU()
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
@@ -76,7 +88,7 @@ class SupervisedAutoEncoder(nn.Module):
         self.out_ae_dense = nn.Linear(hidden_units[1], 1)
 
         # x0 + Encoder
-        concat_dim = num_features + hidden_units[0]
+        concat_dim = num_all_features + hidden_units[0]
         self.concat_dropout = nn.Dropout(dropout_rates[3])
 
         # additional hidden layers
@@ -97,7 +109,24 @@ class SupervisedAutoEncoder(nn.Module):
         self.out_dense = nn.Linear(prev_dim, 1)
 
     def forward(self, x):
-        encoder = self.noise(x)
+        if self.tags is not None:
+            x_feature = x[:, : self.num_features]
+            x_lag = x[:, self.num_features :]
+
+            batch_size = x.size(0)
+
+            # tagsをbatch_size分繰り返し
+            tags_expanded = self.tags.unsqueeze(0).expand(batch_size, -1, -1)
+            # (batch_size, num_features, num_tags) -> (batch_size, num_features * num_tags)
+            tags_flat = tags_expanded.reshape(batch_size, -1)
+
+            # (batch_size, num_features + num_features*num_tags)
+            x_feature_with_tags = torch.cat([x_feature, tags_flat], dim=1)
+            x_input = torch.cat([x_feature_with_tags, x_lag], dim=1)
+        else:
+            x_input = x
+
+        encoder = self.noise(x_input)
         encoder = self.encoder_dense(encoder)
         encoder = self.encoder_activation(encoder)
 

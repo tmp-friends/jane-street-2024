@@ -13,9 +13,9 @@ defaults:
 n_epochs: 20
 train_batch_size: 4096
 valid_batch_size: 4096
-scheduler: "CosineAnnealingLR"
-lr: 5e-4
-min_lr: 1e-5
+scheduler: ""
+lr: 1e-4
+min_lr: 1e-6
 T_max: 500
 n_accumulates: 1
 early_stopping_steps: 3

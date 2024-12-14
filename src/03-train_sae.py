@@ -237,7 +237,7 @@ def main(cfg: TrainConfig):
 
     tags_df = pl.read_csv(os.path.join(cfg.dir.data_dir, "features.csv"))
     tags_array = tags_df.drop("feature").to_pandas().values.astype(np.float32)
-    tags_tensor = torch.from_numpy(tags_array)
+    tags_tensor = torch.from_numpy(tags_array).to(device)
 
     #####################
     # Feature engineering

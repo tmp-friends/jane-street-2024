@@ -46,6 +46,8 @@ class SupervisedAutoEncoder(nn.Module):
         num_features: int,
         num_lag_features: int,
         tags: list[float] | None = None,  # (num_features, num_tags)
+        tag_embed_dim: int = 4,
+        tag_weight: float = 0.5,
         hidden_units: list[int] = [96, 96, 896, 448, 448, 256],
         dropout_rates: list[int] = [
             0.03527936123679956,
@@ -61,14 +63,17 @@ class SupervisedAutoEncoder(nn.Module):
         super().__init__()
 
         self.num_features = num_features
+        self.tags = tags
+        self.tag_weight = tag_weight
+
         num_all_features = num_features + num_lag_features
 
         if tags is not None:
-            # 学習不要パラメータとして登録
-            self.register_buffer("tags", tags)
-            num_input_features = num_features * (1 + tags.shape[1]) + num_lag_features
+            self.tag_embedding = nn.Linear(tags.shape[1], tag_embed_dim)
         else:
-            num_input_features = num_all_features
+            self.tag_embedding = None
+
+        num_input_features = num_all_features + (num_features * tag_embed_dim)
 
         # Encoder
         self.noise = GaussianNoise(std=0.035)
@@ -109,22 +114,25 @@ class SupervisedAutoEncoder(nn.Module):
         self.out_dense = nn.Linear(prev_dim, 1)
 
     def forward(self, x):
+        x_feature = x[:, : self.num_features]
+        x_lag = x[:, self.num_features :]
+
         if self.tags is not None:
-            x_feature = x[:, : self.num_features]
-            x_lag = x[:, self.num_features :]
+            tag_embed = self.tag_embedding(self.tags)
 
             batch_size = x.size(0)
+            tag_embed_expanded = tag_embed.unsqueeze(0).expand(batch_size, -1, -1)
+            tag_embed_flat = tag_embed_expanded.reshape(batch_size, -1)
 
-            # tagsをbatch_size分繰り返し
-            tags_expanded = self.tags.unsqueeze(0).expand(batch_size, -1, -1)
-            # (batch_size, num_features, num_tags) -> (batch_size, num_features * num_tags)
-            tags_flat = tags_expanded.reshape(batch_size, -1)
-
-            # (batch_size, num_features + num_features*num_tags)
-            x_feature_with_tags = torch.cat([x_feature, tags_flat], dim=1)
-            x_input = torch.cat([x_feature_with_tags, x_lag], dim=1)
+            tag_embed_flat = self.tag_weight * tag_embed_flat
         else:
-            x_input = x
+            tag_embed_flat = None
+
+        # 入力の結合
+        if tag_embed_flat is not None:
+            x_input = torch.cat([x_feature, x_lag, tag_embed_flat], dim=1)
+        else:
+            x_input = torch.cat([x_feature, x_lag], dim=1)
 
         encoder = self.noise(x_input)
         encoder = self.encoder_dense(encoder)

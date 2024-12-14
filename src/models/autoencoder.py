@@ -59,7 +59,7 @@ class SupervisedAutoEncoder(nn.Module):
         super().__init__()
 
         # Encoder
-        self.noise = GaussianNoise(std=0.1)
+        self.noise = GaussianNoise(std=0.035)
         self.encoder_dense = nn.Linear(num_features, hidden_units[0])
         self.encoder_activation = nn.SiLU()  # Swish
 

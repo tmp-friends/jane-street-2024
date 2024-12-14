@@ -22,7 +22,7 @@ from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 
 from conf.type import TrainConfig
-from utils.utils import set_seed, reduce_mem_usage
+from utils.utils import set_seed
 from utils.score import score_weighted_r2
 from datasets.market_dataset import MarketDataset
 from models.autoencoder import SupervisedAutoEncoder
@@ -229,11 +229,17 @@ def main(cfg: TrainConfig):
     """
     ref: Neural Network Starter Pytorch Version (https://www.kaggle.com/code/a763337092/neural-network-starter-pytorch-version)
     """
+    #####################
     # Load data
+    #####################
+
     df: pl.LazyFrame = pl.scan_parquet(os.path.join(cfg.dir.data_dir, "train.parquet"))
 
+    #####################
     # Feature engineering
-    # 1. 前日のresponder_idの値との差分をlag特徴量とする
+    #####################
+
+    # 前日のresponder_idの値との差分をlag特徴量とする
     # ref: https://www.kaggle.com/code/motono0223/js24-preprocessing-create-lags
     lag_cols_original = ["date_id", "symbol_id"] + [
         f"responder_{idx}" for idx in range(9)
@@ -247,38 +253,53 @@ def main(cfg: TrainConfig):
 
     df = df.join(lags_df, on=["date_id", "symbol_id"], how="left")
 
+    #####################
     # Preprocessing
+    #####################
+
     feature_cols = [v for v in df.collect_schema() if ("feature" in v) or ("lag" in v)]
     target_col = "responder_6"
     weight_col = "weight"
 
-    # 1. 特徴量の平均と分散の算出 for Normalize
-    # 全データの値を使ったほうがスコアが出る
+    # 時系列でsplit (valid にする date_id は固定)
+    valid_date_point = 1634
+    train_df = df.filter(pl.col("date_id") <= valid_date_point)
+    valid_df = df.filter(pl.col("date_id") > valid_date_point)
+
+    del df
+    gc.collect()
+
+    # train の特徴量の平均と分散の算出
     features_mean_df = (
-        df.select([pl.col(v).mean().alias(v) for v in feature_cols]).collect().row(0)
+        train_df.select([pl.col(v).mean().alias(v) for v in feature_cols])
+        .collect()
+        .row(0)
     )
     features_mean = {v: features_mean_df[i] for i, v in enumerate(feature_cols)}
     del features_mean_df
     gc.collect()
 
     features_std_df = (
-        df.select([pl.col(v).std().alias(v) for v in feature_cols]).collect().row(0)
+        train_df.select([pl.col(v).std().alias(v) for v in feature_cols])
+        .collect()
+        .row(0)
     )
     features_std = {v: features_std_df[i] for i, v in enumerate(feature_cols)}
     del features_std_df
     gc.collect()
 
-    # 2. 学習データを絞る
-    df = df.filter(pl.col("date_id") >= 1100)
+    # 欠損値補完
+    train_df = train_df.fill_null(strategy="forward").fill_null(0)
+    valid_df = valid_df.fill_null(strategy="forward").fill_null(0)
 
-    # 3. 欠損値補完
-    # df = df.with_columns(
-    #     [pl.col(v).fill_null(features_mean[v]) for i, v in enumerate(feature_cols)]
-    # )
-    df = df.fill_null(strategy="forward").fill_null(0)  # 0埋めのほうがスコアが出る
-
-    # 4. Normalize
-    df = df.with_columns(
+    # Normalize
+    train_df = train_df.with_columns(
+        [
+            ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
+            for v in feature_cols
+        ]
+    )
+    valid_df = valid_df.with_columns(
         [
             ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
             for v in feature_cols
@@ -288,16 +309,12 @@ def main(cfg: TrainConfig):
     # save
     joblib.dump({"mean": features_mean, "std": features_std}, "scaler.pkl")
 
-    df: pd.DataFrame = df.collect().to_pandas()
-    # df = reduce_mem_usage(df)
-    LOGGER.info(df)
+    train_df: pd.DataFrame = train_df.collect().to_pandas()
+    valid_df: pd.DataFrame = valid_df.collect().to_pandas()
 
-    cfg.T_max = df.shape[0] * (5 - 1) * cfg.n_epochs // cfg.train_batch_size // 5
+    LOGGER.info(train_df)
 
-    # 時系列でsplit (valid にする date_id は固定)
-    valid_date_point = 1634
-    train_df = df[df["date_id"] < valid_date_point]
-    valid_df = df[df["date_id"] >= valid_date_point]
+    cfg.T_max = train_df.shape[0] * (5 - 1) * cfg.n_epochs // cfg.train_batch_size // 5
 
     # Create loaders
     train_dataset = MarketDataset(

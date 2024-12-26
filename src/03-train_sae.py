@@ -41,6 +41,13 @@ def fetch_scheduler(cfg: TrainConfig, optimizer: optim) -> lr_scheduler:
             T_0=cfg.T_0,
             eta_min=cfg.min_lr,
         )
+    elif cfg.scheduler == "ReduceLROnPlateau":
+        scheduler = lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",  # valid loss を最小にしたい
+            factor=0.5,
+            patience=3,
+        )
     else:
         return None
 
@@ -80,13 +87,16 @@ def train_one_epoch(
     weights = []
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        x = data["features"].to(device, dtype=torch.float)
+        x_feature = data["features"].to(device, dtype=torch.float)
+        x_lag = data["lags"].to(device, dtype=torch.float)
         y = data["target"].to(device, dtype=torch.float)
         weight = data["weight"].to(device, dtype=torch.float)
 
-        batch_size = x.size(0)
+        x = torch.cat([x_feature, x_lag], dim=1)
 
-        decoder, out_ae, out = model(x)
+        batch_size = x_feature.size(0)
+
+        decoder, out_ae, out = model(x_feature, x_lag)
 
         # (batch_size, num_features) のため、num_featuresで平均をとる
         loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
@@ -110,8 +120,8 @@ def train_one_epoch(
             # zero the parameter gradients
             optimizer.zero_grad()
 
-            if scheduler is not None:
-                scheduler.step()
+            # if scheduler is not None:
+            #     scheduler.step()
 
         running_loss += loss.item() * batch_size
         dataset_size += batch_size
@@ -153,13 +163,16 @@ def valid_one_epoch(
     weights = []
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        x = data["features"].to(device, dtype=torch.float)
+        x_feature = data["features"].to(device, dtype=torch.float)
+        x_lag = data["lags"].to(device, dtype=torch.float)
         y = data["target"].to(device, dtype=torch.float)
         weight = data["weight"].to(device, dtype=torch.float)
 
+        x = torch.cat([x_feature, x_lag], dim=1)
+
         batch_size = x.size(0)
 
-        decoder, out_ae, out = model(x)
+        decoder, out_ae, out = model(x_feature, x_lag)
 
         # (batch_size, num_features) のため、num_featuresで平均をとる
         loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
@@ -215,14 +228,6 @@ def save_history(history: dict) -> None:
     plt.savefig("plt-r2.png")
     plt.clf()
 
-    plt.plot(range(history.shape[0]), history["lr"].values, label="lr")
-    plt.xlabel("epochs")
-    plt.ylabel("lr")
-    plt.grid()
-    plt.legend()
-    plt.savefig("plt-lr.png")
-    plt.clf()
-
 
 @hydra.main(config_path="conf", config_name="train", version_base="1.1")
 def main(cfg: TrainConfig):
@@ -245,10 +250,8 @@ def main(cfg: TrainConfig):
 
     # 前日のresponder_idの値との差分をlag特徴量とする
     # ref: https://www.kaggle.com/code/motono0223/js24-preprocessing-create-lags
-    lag_cols_original = ["date_id", "symbol_id"] + [
-        f"responder_{idx}" for idx in range(9)
-    ]
-    lag_cols_rename = {f"responder_{idx}": f"responder_{idx}_lag_1" for idx in range(9)}
+    lag_cols_original = ["date_id", "symbol_id"] + [f"responder_{i}" for i in range(9)]
+    lag_cols_rename = {f"responder_{i}": f"responder_{i}_lag_1" for i in range(9)}
 
     lags_df = df.select(pl.col(lag_cols_original)).rename(lag_cols_rename)
     lags_df = lags_df.with_columns(date_id=pl.col("date_id") + 1)  # lagged by 1day
@@ -320,18 +323,18 @@ def main(cfg: TrainConfig):
 
     LOGGER.info(train_df)
 
-    cfg.T_max = train_df.shape[0] * (5 - 1) * cfg.n_epochs // cfg.train_batch_size // 5
-
     # Create loaders
     train_dataset = MarketDataset(
         df=train_df,
-        feature_cols=all_feature_cols,
+        feature_cols=feature_cols,
+        lag_cols=lag_cols,
         target_col=target_col,
         weight_col=weight_col,
     )
     valid_dataset = MarketDataset(
         df=valid_df,
-        feature_cols=all_feature_cols,
+        feature_cols=feature_cols,
+        lag_cols=lag_cols,
         target_col=target_col,
         weight_col=weight_col,
     )
@@ -384,6 +387,9 @@ def main(cfg: TrainConfig):
             epoch=epoch,
         )
 
+        if scheduler is not None:
+            scheduler.step(valid_epoch_loss)
+
         LOGGER.info(
             f"""
             Epoch {epoch}:
@@ -396,7 +402,6 @@ def main(cfg: TrainConfig):
         history["Valid Loss"].append(valid_epoch_loss)
         history["Train R2"].append(train_epoch_r2)
         history["Valid R2"].append(valid_epoch_r2)
-        history["lr"].append(scheduler.get_last_lr()[0])
 
         if best_epoch_r2 <= valid_epoch_r2:
             LOGGER.info(f"Val R2 Improved ({best_epoch_r2} ---> {valid_epoch_r2})")

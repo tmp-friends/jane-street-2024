@@ -113,9 +113,8 @@ class SupervisedAutoEncoder(nn.Module):
         # out
         self.out_dense = nn.Linear(prev_dim, 1)
 
-    def forward(self, x):
-        x_feature = x[:, : self.num_features]
-        x_lag = x[:, self.num_features :]
+    def forward(self, x_feature, x_lag):
+        x = torch.cat([x_feature, x_lag], dim=1)
 
         if self.tags is not None:
             tag_embed = self.tag_embedding(self.tags)
@@ -132,7 +131,7 @@ class SupervisedAutoEncoder(nn.Module):
         if tag_embed_flat is not None:
             x_input = torch.cat([x_feature, x_lag, tag_embed_flat], dim=1)
         else:
-            x_input = torch.cat([x_feature, x_lag], dim=1)
+            x_input = x
 
         encoder = self.noise(x_input)
         encoder = self.encoder_dense(encoder)

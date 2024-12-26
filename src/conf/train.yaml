@@ -10,12 +10,10 @@ defaults:
   - _self_
   - dir: local
 
-n_epochs: 20
+n_epochs: 50
 train_batch_size: 4096
 valid_batch_size: 4096
-scheduler: ""
+scheduler: "ReduceLROnPlateau"
 lr: 1e-4
-min_lr: 1e-6
-T_max: 500
 n_accumulates: 1
-early_stopping_steps: 3
+early_stopping_steps: 10

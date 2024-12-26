@@ -21,8 +21,6 @@ class TrainConfig:
     valid_batch_size: int
     scheduler: str
     lr: float
-    min_lr: float
-    T_max: int
     n_accumulates: int
     early_stopping_steps: int
 

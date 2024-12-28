@@ -10,10 +10,12 @@ defaults:
   - _self_
   - dir: local
 
-n_epochs: 50
+num_epochs: 20
 train_batch_size: 4096
 valid_batch_size: 4096
-scheduler: "ReduceLROnPlateau"
-lr: 1e-4
-n_accumulates: 1
-early_stopping_steps: 10
+scheduler: "CosineAnnealingLR"
+lr: 5e-4
+min_lr: 1e-5
+T_max: 500
+num_accumulates: 1
+early_stopping_steps: 3

@@ -107,21 +107,21 @@ def train_one_epoch(
         loss_out_ae = (weight * loss_out_ae).mean()
         loss = (weight * loss).mean()
 
-        loss /= cfg.n_accumulates
+        loss /= cfg.num_accumulates
 
         # 同一の計算グラフから複数回 backward() を呼ぶと勾配が累積される
         loss_decoder.backward(retain_graph=True)
         loss_out_ae.backward(retain_graph=True)
         loss.backward()
 
-        if (step + 1) % cfg.n_accumulates == 0:
+        if (step + 1) % cfg.num_accumulates == 0:
             optimizer.step()
 
             # zero the parameter gradients
             optimizer.zero_grad()
 
-            # if scheduler is not None:
-            #     scheduler.step()
+            if scheduler is not None:
+                scheduler.step()
 
         running_loss += loss.item() * batch_size
         dataset_size += batch_size
@@ -323,6 +323,10 @@ def main(cfg: TrainConfig):
 
     LOGGER.info(train_df)
 
+    cfg.T_max = (
+        train_df.shape[0] * (5 - 1) * cfg.num_epochs // cfg.train_batch_size // 5
+    )
+
     # Create loaders
     train_dataset = MarketDataset(
         df=train_df,
@@ -371,7 +375,7 @@ def main(cfg: TrainConfig):
     early_stopping_cnt = 0
 
     history = defaultdict(list)
-    for epoch in range(1, cfg.n_epochs + 1):
+    for epoch in range(1, cfg.num_epochs + 1):
         train_epoch_loss, train_epoch_r2 = train_one_epoch(
             cfg=cfg,
             dataloader=train_loader,
@@ -386,9 +390,6 @@ def main(cfg: TrainConfig):
             optimizer=optimizer,
             epoch=epoch,
         )
-
-        if scheduler is not None:
-            scheduler.step(valid_epoch_loss)
 
         LOGGER.info(
             f"""

@@ -16,12 +16,14 @@ class ModelConfig:
 @dataclass
 class TrainConfig:
     dir: DirConfig
-    n_epochs: int
+    num_epochs: int
     train_batch_size: int
     valid_batch_size: int
     scheduler: str
     lr: float
-    n_accumulates: int
+    min_lr: float
+    T_max: int
+    num_accumulates: int
     early_stopping_steps: int
 
 
@@ -29,6 +31,6 @@ class TrainConfig:
 class InferConfig:
     dir: DirConfig
     model: ModelConfig
-    n_folds: int
+    num_folds: int
     model_dir: str
     test_batch_size: int

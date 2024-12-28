@@ -124,12 +124,8 @@ class SupervisedAutoEncoder(nn.Module):
             tag_embed_flat = tag_embed_expanded.reshape(batch_size, -1)
 
             tag_embed_flat = self.tag_weight * tag_embed_flat
-        else:
-            tag_embed_flat = None
 
-        # 入力の結合
-        if tag_embed_flat is not None:
-            x_input = torch.cat([x_feature, x_lag, tag_embed_flat], dim=1)
+            x_input = torch.cat([x, tag_embed_flat], dim=1)
         else:
             x_input = x
 

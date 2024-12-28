@@ -109,8 +109,12 @@ class SupervisedAutoEncoder(nn.Module):
 
         x0 = self.input_norm(x)
 
-        encoder = self.noise(x0)
-        encoder = self.encoder_dense(encoder)
+        if self.training:
+            encoder_input = self.noise(x0)
+        else:
+            encoder_input = x0
+
+        encoder = self.encoder_dense(encoder_input)
         encoder = self.encoder_norm(encoder)
         encoder = self.encoder_activation(encoder)
 

@@ -19,10 +19,7 @@ class TrainConfig:
     num_epochs: int
     train_batch_size: int
     valid_batch_size: int
-    scheduler: str
     lr: float
-    min_lr: float
-    T_max: int
     num_accumulates: int
     early_stopping_steps: int
 

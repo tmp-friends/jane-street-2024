@@ -842,6 +842,7 @@ dependencies = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
+    { name = "schedulefree" },
     { name = "scikit-learn" },
     { name = "timm" },
     { name = "torch" },
@@ -869,6 +870,7 @@ requires-dist = [
     { name = "pandas", specifier = "==2.2.1" },
     { name = "polars", specifier = "==1.9.0" },
     { name = "pyarrow", specifier = "==16.1.0" },
+    { name = "schedulefree", specifier = ">=1.4" },
     { name = "scikit-learn", specifier = "==1.2.0" },
     { name = "timm", specifier = "==0.9.16" },
     { name = "torch", specifier = "==2.1.2" },
@@ -2358,6 +2360,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0f/23/b17b483f2857835962ad33e38014efd4911791187e177bc23b057d35bee8/safetensors-0.4.5-pp310-pypy310_pp73-musllinux_1_1_aarch64.whl", hash = "sha256:e3cec4a29eb7fe8da0b1c7988bc3828183080439dd559f720414450de076fcab", size = 620565 },
     { url = "https://files.pythonhosted.org/packages/19/46/5d11dc300feaad285c2f1bd784ff3f689f5e0ab6be49aaf568f3a77019eb/safetensors-0.4.5-pp310-pypy310_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:21742b391b859e67b26c0b2ac37f52c9c0944a879a25ad2f9f9f3cd61e7fda8f", size = 606660 },
 ]
+
+[[package]]
+name = "schedulefree"
+version = "1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/8e/1952577f6c3ca6669383f1096891c5d14d9c35d5d454619d21c9d65b8116/schedulefree-1.4.tar.gz", hash = "sha256:59b7ec9ac0f714730cbcdde435b7d9b415d3fc3c5d2133e0f124e07aba4ba86a", size = 22815 }
 
 [[package]]
 name = "scikit-image"

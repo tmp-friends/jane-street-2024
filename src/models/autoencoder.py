@@ -43,13 +43,10 @@ class SupervisedAutoEncoder(nn.Module):
 
     def __init__(
         self,
-        num_features: int,
-        num_lag_features: int,
-        tags: list[float] | None = None,  # (num_features, num_tags)
-        tag_embed_dim: int = 4,
-        tag_weight: float = 0.5,
-        hidden_units: list[int] = [96, 96, 896, 448, 448, 256],
-        dropout_rates: list[int] = [
+        num_features,
+        num_lag_features,
+        hidden_units=[96, 96, 896, 448, 448, 256],
+        dropout_rates=[
             0.03527936123679956,
             0.038424974585075086,
             0.42409238408801436,
@@ -62,22 +59,13 @@ class SupervisedAutoEncoder(nn.Module):
     ):
         super().__init__()
 
-        self.num_features = num_features
-        self.tags = tags
-        self.tag_weight = tag_weight
-
         num_all_features = num_features + num_lag_features
-
-        if tags is not None:
-            self.tag_embedding = nn.Linear(tags.shape[1], tag_embed_dim)
-        else:
-            self.tag_embedding = None
-
-        num_input_features = num_all_features + (num_features * tag_embed_dim)
+        self.input_norm = nn.BatchNorm1d(num_all_features)
 
         # Encoder
-        self.noise = GaussianNoise(std=0.035)
-        self.encoder_dense = nn.Linear(num_input_features, hidden_units[0])
+        self.noise = GaussianNoise(std=0.1)
+        self.encoder_dense = nn.Linear(num_all_features, hidden_units[0])
+        self.encoder_norm = nn.BatchNorm1d(hidden_units[0])
         self.encoder_activation = nn.SiLU()  # Swish
 
         # Decoder
@@ -86,6 +74,7 @@ class SupervisedAutoEncoder(nn.Module):
 
         # x_ae
         self.x_ae_dense = nn.Linear(num_all_features, hidden_units[1])
+        self.x_ae_norm = nn.BatchNorm1d(hidden_units[1])
         self.x_ae_activation = nn.SiLU()
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
@@ -94,6 +83,7 @@ class SupervisedAutoEncoder(nn.Module):
 
         # x0 + Encoder
         concat_dim = num_all_features + hidden_units[0]
+        self.concat_norm = nn.BatchNorm1d(concat_dim)
         self.concat_dropout = nn.Dropout(dropout_rates[3])
 
         # additional hidden layers
@@ -103,6 +93,7 @@ class SupervisedAutoEncoder(nn.Module):
             self.hidden_layers.extend(
                 [
                     nn.Linear(prev_dim, hidden_units[i]),
+                    nn.BatchNorm1d(hidden_units[i]),
                     nn.SiLU(),
                     nn.Dropout(dropout_rates[i + 2]),
                 ]
@@ -116,33 +107,25 @@ class SupervisedAutoEncoder(nn.Module):
     def forward(self, x_feature, x_lag):
         x = torch.cat([x_feature, x_lag], dim=1)
 
-        if self.tags is not None:
-            tag_embed = self.tag_embedding(self.tags)
+        x0 = self.input_norm(x)
 
-            batch_size = x.size(0)
-            tag_embed_expanded = tag_embed.unsqueeze(0).expand(batch_size, -1, -1)
-            tag_embed_flat = tag_embed_expanded.reshape(batch_size, -1)
-
-            tag_embed_flat = self.tag_weight * tag_embed_flat
-
-            x_input = torch.cat([x, tag_embed_flat], dim=1)
-        else:
-            x_input = x
-
-        encoder = self.noise(x_input)
+        encoder = self.noise(x0)
         encoder = self.encoder_dense(encoder)
+        encoder = self.encoder_norm(encoder)
         encoder = self.encoder_activation(encoder)
 
         decoder = self.decoder_dropout(encoder)
         decoder = self.decoder_dense(decoder)
 
         x_ae = self.x_ae_dense(decoder)
+        x_ae = self.x_ae_norm(x_ae)
         x_ae = self.x_ae_activation(x_ae)
         x_ae = self.x_ae_dropout(x_ae)
 
         out_ae = self.out_ae_dense(x_ae)
 
-        x_concat = torch.cat([x, encoder], dim=1)
+        x_concat = torch.cat([x0, encoder], dim=1)
+        x_concat = self.concat_norm(x_concat)
         x_concat = self.concat_dropout(x_concat)
 
         x_hidden = self.hidden_layers(x_concat)

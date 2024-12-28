@@ -94,7 +94,7 @@ def train_one_epoch(
 
         x = torch.cat([x_feature, x_lag], dim=1)
 
-        batch_size = x_feature.size(0)
+        batch_size = x.size(0)
 
         decoder, out_ae, out = model(x_feature, x_lag)
 
@@ -271,52 +271,19 @@ def main(cfg: TrainConfig):
     weight_col = "weight"
 
     # 時系列でsplit (valid にする date_id は固定)
+    train_date_point = 820
     valid_date_point = 1634
-    train_df = df.filter(pl.col("date_id") <= valid_date_point)
+    train_df = df.filter(
+        train_date_point <= pl.col("date_id"), pl.col("date_id") <= valid_date_point
+    )
     valid_df = df.filter(pl.col("date_id") > valid_date_point)
 
     del df
     gc.collect()
 
-    # train の特徴量の平均と分散の算出
-    features_mean_df = (
-        train_df.select([pl.col(v).mean().alias(v) for v in all_feature_cols])
-        .collect()
-        .row(0)
-    )
-    features_mean = {v: features_mean_df[i] for i, v in enumerate(all_feature_cols)}
-    del features_mean_df
-    gc.collect()
-
-    features_std_df = (
-        train_df.select([pl.col(v).std().alias(v) for v in all_feature_cols])
-        .collect()
-        .row(0)
-    )
-    features_std = {v: features_std_df[i] for i, v in enumerate(all_feature_cols)}
-    del features_std_df
-    gc.collect()
-
     # 欠損値補完
     train_df = train_df.fill_null(strategy="forward").fill_null(0)
     valid_df = valid_df.fill_null(strategy="forward").fill_null(0)
-
-    # Normalize
-    train_df = train_df.with_columns(
-        [
-            ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in all_feature_cols
-        ]
-    )
-    valid_df = valid_df.with_columns(
-        [
-            ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in all_feature_cols
-        ]
-    )
-
-    # save
-    joblib.dump({"mean": features_mean, "std": features_std}, "scaler.pkl")
 
     train_df: pd.DataFrame = train_df.collect().to_pandas()
     valid_df: pd.DataFrame = valid_df.collect().to_pandas()
@@ -346,7 +313,8 @@ def main(cfg: TrainConfig):
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg.train_batch_size,
-        shuffle=False,
+        shuffle=True,
+        num_workers=8,
         pin_memory=True,
         drop_last=True,
     )
@@ -354,12 +322,14 @@ def main(cfg: TrainConfig):
         valid_dataset,
         batch_size=cfg.valid_batch_size,
         shuffle=False,
+        num_workers=8,
         pin_memory=True,
     )
 
     # Def model
     model = SupervisedAutoEncoder(
-        num_features=len(feature_cols), num_lag_features=len(lag_cols), tags=tags_tensor
+        num_features=len(feature_cols),
+        num_lag_features=len(lag_cols),
     )
     model.to(device=device)
 

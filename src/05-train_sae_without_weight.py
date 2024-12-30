@@ -29,18 +29,15 @@ from models.autoencoder import SupervisedAutoEncoder
 
 
 def criterion_decoder(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
-    return nn.MSELoss(reduction="none")(outputs, targets)
+    return nn.MSELoss()(outputs, targets)
 
 
 def criterion_ae(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
-    return nn.MSELoss(reduction="none")(outputs, targets)
+    return nn.MSELoss()(outputs, targets)
 
 
 def criterion(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
-    return nn.MSELoss(reduction="none")(outputs, targets)
+    return nn.MSELoss()(outputs, targets)
 
 
 def train_one_epoch(
@@ -63,7 +60,7 @@ def train_one_epoch(
     for step, data in bar:
         x_feature = data["features"].to(device, dtype=torch.float)
         x_lag = data["lags"].to(device, dtype=torch.float)
-        y = data["target"].to(device, dtype=torch.float)
+        y = data["targets"].to(device, dtype=torch.float)
         weight = data["weight"].to(device, dtype=torch.float)
 
         x = torch.cat([x_feature, x_lag], dim=1)
@@ -72,14 +69,9 @@ def train_one_epoch(
 
         decoder, out_ae, out = model(x_feature, x_lag)
 
-        # (batch_size, num_features) のため、num_featuresで平均をとる
-        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
-        loss_out_ae = criterion_ae(out_ae, y)  # (batch_size,)
-        loss = criterion(out, y)  # (batch_size,)
-
-        loss_decoder = (weight * loss_decoder).mean()
-        loss_out_ae = (weight * loss_out_ae).mean()
-        loss = (weight * loss).mean()
+        loss_decoder = criterion_decoder(decoder, x)
+        loss_out_ae = criterion_ae(out_ae, y)
+        loss = criterion(out, y)
 
         loss /= cfg.num_accumulates
 
@@ -137,7 +129,7 @@ def valid_one_epoch(
     for step, data in bar:
         x_feature = data["features"].to(device, dtype=torch.float)
         x_lag = data["lags"].to(device, dtype=torch.float)
-        y = data["target"].to(device, dtype=torch.float)
+        y = data["targets"].to(device, dtype=torch.float)
         weight = data["weight"].to(device, dtype=torch.float)
 
         x = torch.cat([x_feature, x_lag], dim=1)
@@ -146,14 +138,7 @@ def valid_one_epoch(
 
         decoder, out_ae, out = model(x_feature, x_lag)
 
-        # (batch_size, num_features) のため、num_featuresで平均をとる
-        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
-        loss_out_ae = criterion_ae(out_ae, y)  # (batch_size,)
-        loss = criterion(out, y)  # (batch_size,)
-
-        loss_decoder = (weight * loss_decoder).mean()
-        loss_out_ae = (weight * loss_out_ae).mean()
-        loss = (weight * loss).mean()
+        loss = criterion(out, y)
 
         running_loss += loss.item() * batch_size
         dataset_size += batch_size
@@ -238,8 +223,8 @@ def main(cfg: TrainConfig):
 
     feature_cols = [v for v in df.collect_schema() if "feature" in v]
     lag_cols = [v for v in df.collect_schema() if "lag" in v]
-    all_feature_cols = feature_cols + lag_cols
-    target_col = "responder_6"
+    category_cols = ["symbol_id"]
+    target_cols = "responder_6"
     weight_col = "weight"
 
     # 時系列でsplit (valid にする date_id は固定)
@@ -267,14 +252,14 @@ def main(cfg: TrainConfig):
         df=train_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
-        target_col=target_col,
+        target_cols=target_cols,
         weight_col=weight_col,
     )
     valid_dataset = MarketDataset(
         df=valid_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
-        target_col=target_col,
+        target_cols=target_cols,
         weight_col=weight_col,
     )
 

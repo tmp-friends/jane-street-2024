@@ -103,7 +103,7 @@ class SupervisedAutoEncoder(nn.Module):
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
         # out_ae - multi label
-        self.out_ae_dense = nn.Linear(hidden_units[1], 9)
+        self.out_ae_dense = nn.Linear(hidden_units[1], 1)
 
         # x0 + Encoder
         concat_dim = num_all_features + hidden_units[0]
@@ -126,7 +126,7 @@ class SupervisedAutoEncoder(nn.Module):
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
 
         # out - multi label
-        self.out_dense = nn.Linear(prev_dim, 9)
+        self.out_dense = nn.Linear(prev_dim, 1)
 
     def forward(self, x_feature, x_lag, x_category=None, x_date=None):
         x = torch.cat([x_feature, x_lag], dim=1)

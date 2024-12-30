@@ -10,9 +10,9 @@ defaults:
   - _self_
   - dir: local
 
-num_epochs: 20
+num_epochs: 50
 train_batch_size: 8192
 valid_batch_size: 8192
 lr: 1e-4
 num_accumulates: 1
-early_stopping_steps: 3
+early_stopping_steps: 5

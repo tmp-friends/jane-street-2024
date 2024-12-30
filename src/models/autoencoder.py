@@ -43,8 +43,12 @@ class SupervisedAutoEncoder(nn.Module):
 
     def __init__(
         self,
-        num_features,
-        num_lag_features,
+        num_features: int,
+        num_lag_features: int,
+        # num_categories: int = 40,
+        # category_emb_dim: int = 16,
+        # max_date_id: int = 968,
+        # date_emb_dim: int = 16,
         hidden_units=[96, 96, 896, 448, 448, 256],
         dropout_rates=[
             0.03527936123679956,
@@ -60,6 +64,26 @@ class SupervisedAutoEncoder(nn.Module):
         super().__init__()
 
         num_all_features = num_features + num_lag_features
+        # num_all_features = (
+        #     num_features + num_lag_features + category_emb_dim + date_emb_dim
+        # )
+
+        # if self.category_emb_dim > 0:
+        #     self.category_embedding = nn.Embedding(
+        #         num_embeddings=num_categories,
+        #         embedding_dim=category_emb_dim,
+        #     )
+        # else:
+        #     self.category_embedding = None
+
+        # if self.date_emb_dim > 0:
+        #     self.date_embedding = nn.Embedding(
+        #         num_embeddings=max_date_id,
+        #         embedding_dim=date_emb_dim,
+        #     )
+        # else:
+        #     self.date_embedding = None
+
         self.input_norm = nn.BatchNorm1d(num_all_features)
 
         # Encoder
@@ -78,8 +102,8 @@ class SupervisedAutoEncoder(nn.Module):
         self.x_ae_activation = nn.SiLU()
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
-        # out_ae
-        self.out_ae_dense = nn.Linear(hidden_units[1], 1)
+        # out_ae - multi label
+        self.out_ae_dense = nn.Linear(hidden_units[1], 9)
 
         # x0 + Encoder
         concat_dim = num_all_features + hidden_units[0]
@@ -101,11 +125,19 @@ class SupervisedAutoEncoder(nn.Module):
             prev_dim = hidden_units[i]
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
 
-        # out
-        self.out_dense = nn.Linear(prev_dim, 1)
+        # out - multi label
+        self.out_dense = nn.Linear(prev_dim, 9)
 
-    def forward(self, x_feature, x_lag):
+    def forward(self, x_feature, x_lag, x_category=None, x_date=None):
         x = torch.cat([x_feature, x_lag], dim=1)
+
+        # if (self.category_embedding is not None) and (x_category is not None):
+        #     category_embed = self.categorical_embedding(x_category)
+        #     x = torch.cat([x, category_embed], dim=1)
+
+        # if (self.date_embedding is not None) and (x_date is not None):
+        #     date_embed = self.date_embedding(x_date)
+        #     x = torch.cat([x, date_embed], dim=1)
 
         x0 = self.input_norm(x)
 

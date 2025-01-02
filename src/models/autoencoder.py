@@ -103,7 +103,7 @@ class SupervisedAutoEncoder(nn.Module):
         self.x_ae_dropout = nn.Dropout(dropout_rates[2])
 
         # out_ae - multi label
-        self.out_ae_dense = nn.Linear(hidden_units[1], 1)
+        self.out_ae_dense = nn.Linear(hidden_units[1], 9)
 
         # x0 + Encoder
         concat_dim = num_all_features + hidden_units[0]
@@ -126,7 +126,8 @@ class SupervisedAutoEncoder(nn.Module):
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
 
         # out - multi label
-        self.out_dense = nn.Linear(prev_dim, 1)
+        self.out_dense_6 = nn.Linear(prev_dim, 1)
+        self.out_dense_others = nn.Linear(prev_dim, 8)
 
     def forward(self, x_feature, x_lag, x_category=None, x_date=None):
         x = torch.cat([x_feature, x_lag], dim=1)
@@ -166,6 +167,12 @@ class SupervisedAutoEncoder(nn.Module):
 
         x_hidden = self.hidden_layers(x_concat)
 
-        out = self.out_dense(x_hidden)
+        out_6 = self.out_dense_6(x_hidden)
+        out_others = self.out_dense_others(x_hidden)
+
+        # responder_6 を index=6 に挟む
+        out_before6 = out_others[:, :6]  # (batch_size, 6)
+        out_after6 = out_others[:, 6:]  # (batch_size, 2)
+        out = torch.cat([out_before6, out_6, out_after6], dim=1)  # (batch_size, 10)
 
         return decoder, 5 * out_ae.squeeze(), 5 * out.squeeze()

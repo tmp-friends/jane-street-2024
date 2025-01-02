@@ -29,15 +29,18 @@ from models.autoencoder import SupervisedAutoEncoder
 
 
 def criterion_decoder(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    return nn.MSELoss()(outputs, targets)
+    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
+    return nn.MSELoss(reduction="none")(outputs, targets)
 
 
 def criterion_ae(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    return nn.MSELoss()(outputs, targets)
+    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
+    return nn.MSELoss(reduction="none")(outputs, targets)
 
 
 def criterion(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    return nn.MSELoss()(outputs, targets)
+    # loss * weight にしたいので、batch単位でloss集計をしないreduction="none"にする
+    return nn.MSELoss(reduction="none")(outputs, targets)
 
 
 def train_one_epoch(
@@ -69,15 +72,29 @@ def train_one_epoch(
 
         decoder, out_ae, out = model(x_feature, x_lag)
 
-        loss_decoder = criterion_decoder(decoder, x)
-        loss_out_ae = criterion_ae(out_ae, y)
-        loss = criterion(out, y)
+        # (batch_size, num_features) のため、num_featuresで平均をとる
+        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
+        loss_out_ae = criterion_ae(out_ae, y).mean(dim=1)  # (batch_size, 9)
+
+        # responder_6 と それ以外 でそれぞれ loss をとる
+        out_responder6 = out[:, 6]
+        out_others = torch.cat([out[:, :6], out[:, 7:]], dim=1)  # (batch_size, 8)
+        y_responder6 = y[:, 6]
+        y_others = torch.cat([y[:, :6], y[:, 7:]], dim=1)  # (batch_size, 8)
+
+        loss_responder6 = criterion(out_responder6, y_responder6)
+        loss_others = criterion(out_others, y_others).mean(dim=1)
+
+        loss_decoder = (weight * loss_decoder).mean()
+        loss_out_ae = (weight * loss_out_ae).mean()
+        loss_responder6 = (weight * loss_responder6).mean()
+        loss_others = (weight * loss_others).mean()
+
+        alpha = 1.0
+        loss = loss_decoder + loss_out_ae + loss_responder6 + alpha * loss_others
 
         loss /= cfg.num_accumulates
 
-        # 同一の計算グラフから複数回 backward() を呼ぶと勾配が累積される
-        loss_decoder.backward(retain_graph=True)
-        loss_out_ae.backward(retain_graph=True)
         loss.backward()
 
         if (step + 1) % cfg.num_accumulates == 0:
@@ -90,8 +107,8 @@ def train_one_epoch(
         dataset_size += batch_size
 
         # responder_6 のみで評価
-        y_true.append(y.detach()[:, 6])
-        y_preds.append(out.detach()[:, 6])
+        y_true.append(y_responder6.detach())
+        y_preds.append(out_responder6.detach())
         weights.append(weight.detach())
 
         bar.set_postfix(
@@ -139,14 +156,34 @@ def valid_one_epoch(
 
         decoder, out_ae, out = model(x_feature, x_lag)
 
-        loss = criterion(out, y)
+        # (batch_size, num_features) のため、num_featuresで平均をとる
+        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
+        loss_out_ae = criterion_ae(out_ae, y).mean(dim=1)  # (batch_size, 9)
+
+        # responder_6 と それ以外 でそれぞれ loss をとる
+        y_responder6 = y[:, 6]
+        out_responder6 = out[:, 6]
+        out_others = torch.cat([out[:, :6], out[:, 7:]], dim=1)  # (batch_size, 8)
+        y_responder6 = y[:, 6]
+        y_others = torch.cat([y[:, :6], y[:, 7:]], dim=1)  # (batch_size, 8)
+
+        loss_responder6 = criterion(out_responder6, y_responder6)
+        loss_others = criterion(out_others, y_others).mean(dim=1)
+
+        loss_decoder = (weight * loss_decoder).mean()
+        loss_out_ae = (weight * loss_out_ae).mean()
+        loss_responder6 = (weight * loss_responder6).mean()
+        loss_others = (weight * loss_others).mean()
+
+        alpha = 1.0
+        loss = loss_decoder + loss_out_ae + loss_responder6 + alpha * loss_others
 
         running_loss += loss.item() * batch_size
         dataset_size += batch_size
 
         # responder_6 のみで評価
-        y_true.append(y.detach()[:, 6])
-        y_preds.append(out.detach()[:, 6])
+        y_true.append(y_responder6.detach())
+        y_preds.append(out_responder6.detach())
         weights.append(weight.detach())
 
         bar.set_postfix(

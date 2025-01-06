@@ -59,53 +59,68 @@ def train_one_epoch(
     y_true = []
     y_preds = []
     weights = []
+
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        x_feature = data["features"].to(device, dtype=torch.float)
-        x_lag = data["lags"].to(device, dtype=torch.float)
-        y = data["targets"].to(device, dtype=torch.float)
-        weight = data["weight"].to(device, dtype=torch.float)
+        x_feature = data["features"].to(device)
+        x_lag = data["lags"].to(device)
+        x_category = data["categories"].to(device)
+        x_date = data["timeseries"].to(device)
+        y = data["targets"].to(device)
+        weight = data["weight"].to(device)
 
-        x = torch.cat([x_feature, x_lag], dim=1)
+        batch_size = x_feature.size(0)
 
-        batch_size = x.size(0)
+        decoder, out_ae, out = model(x_feature, x_lag, x_category, x_date)
 
-        decoder, out_ae, out = model(x_feature, x_lag)
+        x_original = torch.cat([x_feature, x_lag], dim=1)
 
-        # (batch_size, num_features) のため、num_featuresで平均をとる
-        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
-        loss_out_ae = criterion_ae(out_ae, y).mean(dim=1)  # (batch_size, 9)
-        loss = criterion(out, y).mean(dim=1)  # (batch_size, 9)
+        # 1. decoder loss
+        loss_decoder_elm = criterion_decoder(decoder, x_original)
+        loss_decoder_per_sample = loss_decoder_elm.mean(dim=1)
+        # 2. AE loss
+        loss_out_ae_elm = criterion_ae(out_ae, y)
+        # 3. loss
+        loss_elm = criterion(out, y)
 
-        loss_decoder = (weight * loss_decoder).mean()
-        loss_out_ae = (weight * loss_out_ae).mean()
-        loss = (weight * loss).mean()
+        loss_decoder = (weight * loss_decoder_per_sample).mean()
+        loss_out_ae = (weight * loss_out_ae_elm).mean()
+        loss_main = (weight * loss_elm).mean()
 
-        loss /= cfg.num_accumulates
+        if epoch <= 10:
+            alpha_decoder = 1.0
+            alpha_out_ae = 1.0
+            alpha_main = 1.0
+        else:
+            alpha_decoder = 0.0  # 後半は AE を考慮しない
+            alpha_out_ae = 0.0
+            alpha_main = 1.0
 
-        # 同一の計算グラフから複数回 backward() を呼ぶと勾配が累積される
-        loss_decoder.backward(retain_graph=True)
-        loss_out_ae.backward(retain_graph=True)
-        loss.backward()
+        # 合計損失
+        loss_total = (
+            alpha_decoder * loss_decoder
+            + alpha_out_ae * loss_out_ae
+            + alpha_main * loss_main
+        )
+
+        loss_total = loss_total / cfg.num_accumulates
+        loss_total.backward()
 
         if (step + 1) % cfg.num_accumulates == 0:
             optimizer.step()
-
-            # zero the parameter gradients
             optimizer.zero_grad()
 
-        running_loss += loss.item() * batch_size
+        running_loss += loss_total.item() * batch_size
         dataset_size += batch_size
 
-        # responder_6 のみで評価
-        y_true.append(y.detach()[:, 6])
-        y_preds.append(out.detach()[:, 6])
+        y_true.append(y.detach())
+        y_preds.append(out.detach())
         weights.append(weight.detach())
 
         bar.set_postfix(
             Epoch=epoch,
             LR=optimizer.param_groups[0]["lr"],
-            Loss=loss.item(),
+            Loss=loss_total.item(),
         )
 
     epoch_loss = running_loss / dataset_size
@@ -136,42 +151,64 @@ def valid_one_epoch(
     weights = []
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        x_feature = data["features"].to(device, dtype=torch.float)
-        x_lag = data["lags"].to(device, dtype=torch.float)
-        y = data["targets"].to(device, dtype=torch.float)
-        weight = data["weight"].to(device, dtype=torch.float)
+        x_feature = data["features"].to(device)
+        x_lag = data["lags"].to(device)
+        x_category = data["categories"].to(device)
+        x_date = data["timeseries"].to(device)
+        y = data["targets"].to(device)
+        weight = data["weight"].to(device)
 
         x = torch.cat([x_feature, x_lag], dim=1)
 
         batch_size = x.size(0)
 
-        decoder, out_ae, out = model(x_feature, x_lag)
+        decoder, out_ae, out = model(x_feature, x_lag, x_category, x_date)
 
-        # (batch_size, num_features) のため、num_featuresで平均をとる
-        loss_decoder = criterion_decoder(decoder, x).mean(dim=1)
-        loss_out_ae = criterion_ae(out_ae, y).mean(dim=1)  # (batch_size, 9)
-        loss = criterion(out, y).mean(dim=1)  # (batch_size, 9)
+        x_original = torch.cat([x_feature, x_lag], dim=1)
 
-        loss_decoder = (weight * loss_decoder).mean()
-        loss_out_ae = (weight * loss_out_ae).mean()
-        loss = (weight * loss).mean()
+        # 1. decoder loss
+        loss_decoder_elm = criterion_decoder(decoder, x_original)
+        loss_decoder_per_sample = loss_decoder_elm.mean(dim=1)
+        # 2. AE loss
+        loss_out_ae_elm = criterion_ae(out_ae, y)
+        # 3. loss
+        loss_elm = criterion(out, y)
 
-        running_loss += loss.item() * batch_size
+        loss_decoder = (weight * loss_decoder_per_sample).mean()
+        loss_out_ae = (weight * loss_out_ae_elm).mean()
+        loss_main = (weight * loss_elm).mean()
+
+        if epoch <= 10:
+            alpha_decoder = 1.0
+            alpha_out_ae = 1.0
+            alpha_main = 1.0
+        else:
+            alpha_decoder = 0.0  # 途中からは AE を考慮しない
+            alpha_out_ae = 0.0
+            alpha_main = 1.0
+
+        # 合計損失
+        loss_total = (
+            alpha_decoder * loss_decoder
+            + alpha_out_ae * loss_out_ae
+            + alpha_main * loss_main
+        )
+
+        running_loss += loss_total.item() * batch_size
         dataset_size += batch_size
 
-        y_true.append(y.detach()[:, 6])
-        y_preds.append(out.detach()[:, 6])
+        y_true.append(y.detach())
+        y_preds.append(out.detach())
         weights.append(weight.detach())
 
         bar.set_postfix(
             Epoch=epoch,
             LR=optimizer.param_groups[0]["lr"],
-            Loss=loss.item(),
+            Loss=loss_total.item(),
         )
 
     epoch_loss = running_loss / dataset_size
 
-    # responder_6 のみで評価
     y_true = torch.cat(y_true)
     y_preds = torch.cat(y_preds)
     weights = torch.cat(weights)
@@ -240,8 +277,9 @@ def main(cfg: TrainConfig):
 
     feature_cols = [v for v in df.collect_schema() if "feature" in v]
     lag_cols = [v for v in df.collect_schema() if "lag" in v]
-    category_cols = ["symbol_id"]
-    target_cols = [f"responder_{i}" for i in range(9)]
+    category_cols = "symbol_id"
+    timeseries_cols = "time_id"
+    target_cols = "responder_6"
     weight_col = "weight"
 
     # 時系列でsplit (valid にする date_id は固定)
@@ -269,6 +307,8 @@ def main(cfg: TrainConfig):
         df=train_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
+        category_cols=category_cols,
+        timeseries_cols=timeseries_cols,
         target_cols=target_cols,
         weight_col=weight_col,
     )
@@ -276,6 +316,8 @@ def main(cfg: TrainConfig):
         df=valid_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
+        category_cols=category_cols,
+        timeseries_cols=timeseries_cols,
         target_cols=target_cols,
         weight_col=weight_col,
     )

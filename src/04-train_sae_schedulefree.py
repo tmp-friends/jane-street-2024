@@ -24,8 +24,8 @@ from torch.utils.data import DataLoader
 from conf.type import TrainConfig
 from utils.utils import set_seed
 from utils.score import score_weighted_r2
-from datasets.market_dataset import MarketDataset
-from models.autoencoder import SupervisedAutoEncoder
+from datasets.market_dataset import SimpleMarketDataset
+from models.autoencoder import SimpleSupervisedAutoEncoder
 
 
 def criterion_decoder(outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -263,14 +263,14 @@ def main(cfg: TrainConfig):
     LOGGER.info(train_df)
 
     # Create loaders
-    train_dataset = MarketDataset(
+    train_dataset = SimpleMarketDataset(
         df=train_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
         target_col=target_col,
         weight_col=weight_col,
     )
-    valid_dataset = MarketDataset(
+    valid_dataset = SimpleMarketDataset(
         df=valid_df,
         feature_cols=feature_cols,
         lag_cols=lag_cols,
@@ -295,7 +295,7 @@ def main(cfg: TrainConfig):
     )
 
     # Def model
-    model = SupervisedAutoEncoder(
+    model = SimpleSupervisedAutoEncoder(
         num_features=len(feature_cols),
         num_lag_features=len(lag_cols),
     )

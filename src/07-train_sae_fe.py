@@ -183,7 +183,7 @@ def valid_one_epoch(
             alpha_out_ae = 1.0
             alpha_main = 1.0
         else:
-            alpha_decoder = 0.0  # 途中からは AE を考慮しない
+            alpha_decoder = 0.0  # 後半は AE を考慮しない
             alpha_out_ae = 0.0
             alpha_main = 1.0
 

@@ -87,18 +87,14 @@ def train_one_epoch(
         loss_out_ae = (weight * loss_out_ae_elm).mean()
         loss_main = (weight * loss_elm).mean()
 
-        # if epoch <= 5:
-        #     alpha_decoder = 1.0
-        #     alpha_out_ae = 1.0
-        #     alpha_main = 1.0
-        # else:
-        #     alpha_decoder = 0.0  # 後半は AE を考慮しない
-        #     alpha_out_ae = 0.0
-        #     alpha_main = 1.0
-
-        alpha_decoder = 1.0
-        alpha_out_ae = 1.0
-        alpha_main = 1.0
+        if epoch <= 10:
+            alpha_decoder = 1.0
+            alpha_out_ae = 1.0
+            alpha_main = 1.0
+        else:
+            alpha_decoder = 0.0  # 後半は AE を考慮しない
+            alpha_out_ae = 0.0
+            alpha_main = 1.0
 
         # 合計損失
         loss_total = (
@@ -182,18 +178,14 @@ def valid_one_epoch(
         loss_out_ae = (weight * loss_out_ae_elm).mean()
         loss_main = (weight * loss_elm).mean()
 
-        # if epoch <= 5:
-        #     alpha_decoder = 1.0
-        #     alpha_out_ae = 1.0
-        #     alpha_main = 1.0
-        # else:
-        #     alpha_decoder = 0.0  # 後半は AE を考慮しない
-        #     alpha_out_ae = 0.0
-        #     alpha_main = 1.0
-
-        alpha_decoder = 1.0
-        alpha_out_ae = 1.0
-        alpha_main = 1.0
+        if epoch <= 10:
+            alpha_decoder = 1.0
+            alpha_out_ae = 1.0
+            alpha_main = 1.0
+        else:
+            alpha_decoder = 0.0  # 途中からは AE を考慮しない
+            alpha_out_ae = 0.0
+            alpha_main = 1.0
 
         # 合計損失
         loss_total = (
@@ -290,25 +282,6 @@ def main(cfg: TrainConfig):
     target_cols = "responder_6"
     weight_col = "weight"
 
-    all_feature_cols = feature_cols + lag_cols
-
-    # train の特徴量の平均と分散の算出
-    features_mean_df = (
-        df.select([pl.col(v).mean().alias(v) for v in all_feature_cols])
-        .collect()
-        .row(0)
-    )
-    features_mean = {v: features_mean_df[i] for i, v in enumerate(all_feature_cols)}
-    del features_mean_df
-    gc.collect()
-
-    features_std_df = (
-        df.select([pl.col(v).std().alias(v) for v in all_feature_cols]).collect().row(0)
-    )
-    features_std = {v: features_std_df[i] for i, v in enumerate(all_feature_cols)}
-    del features_std_df
-    gc.collect()
-
     # 時系列でsplit (valid にする date_id は固定)
     train_date_point = 820
     valid_date_point = 1634
@@ -323,22 +296,6 @@ def main(cfg: TrainConfig):
     # 欠損値補完
     train_df = train_df.fill_null(strategy="forward").fill_null(0)
     valid_df = valid_df.fill_null(strategy="forward").fill_null(0)
-
-    # Normalize
-    train_df = train_df.with_columns(
-        [
-            ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in all_feature_cols
-        ]
-    )
-    valid_df = valid_df.with_columns(
-        [
-            ((pl.col(v) - features_mean[v]) / features_std[v]).alias(v)
-            for v in all_feature_cols
-        ]
-    )
-    # save
-    joblib.dump({"mean": features_mean, "std": features_std}, "scaler.pkl")
 
     train_df: pd.DataFrame = train_df.collect().to_pandas()
     valid_df: pd.DataFrame = valid_df.collect().to_pandas()

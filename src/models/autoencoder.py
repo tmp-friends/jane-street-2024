@@ -68,20 +68,9 @@ class SupervisedAutoEncoder(nn.Module):
         num_features: int,
         num_lag_features: int,
         num_categories: int = 40,
-        category_emb_dim: int = 8,
+        category_emb_dim: int = 16,
         max_date_id: int = 968,
-        date_emb_dim: int = 16,
-        hidden_units=[96, 96, 896, 448, 448, 256],
-        dropout_rates=[
-            0.03527936123679956,
-            0.038424974585075086,
-            0.42409238408801436,
-            0.10431484318345882,
-            0.49230389137187497,
-            0.32024444956111164,
-            0.2716856145683449,
-            0.4379233941604448,
-        ],
+        date_emb_dim: int = 32,
     ):
         super().__init__()
 
@@ -102,98 +91,90 @@ class SupervisedAutoEncoder(nn.Module):
         )
 
         # Embedding 後の入力次元
-        # base_features + category_emb_dim + date_emb_dim
         self.all_input_dim = self.num_base_features + category_emb_dim + date_emb_dim
 
-        # # 入力正規化
         self.input_norm = nn.BatchNorm1d(self.all_input_dim)
 
-        # ----------------------------------------------------
-        # Encoder
-        # ----------------------------------------------------
         self.noise = GaussianNoise(std=0.1)
-        self.encoder_dense = nn.Linear(self.all_input_dim, hidden_units[0])
-        self.encoder_norm = nn.BatchNorm1d(hidden_units[0])
+
+        # encoder
+        self.encoder_dense = nn.Linear(self.all_input_dim, 96)
+        self.encoder_norm = nn.BatchNorm1d(96)
         self.encoder_activation = nn.SiLU()  # Swish
 
-        # ----------------------------------------------------
-        # Decoder
-        #   今回は「数値＋lag のみ」再構築すると想定 -> 出力を num_base_features に設定
-        # ----------------------------------------------------
-        self.decoder_dropout = nn.Dropout(dropout_rates[1])
-        self.decoder_dense = nn.Linear(hidden_units[0], self.num_base_features)
+        # decoder
+        self.decoder_dropout = nn.Dropout(0.200)
+        self.decoder_dense = nn.Linear(96, self.num_base_features)
 
-        # ----------------------------------------------------
-        # x_ae
-        #   Decoder の出力をさらに隠れ層へ
-        # ----------------------------------------------------
-        self.x_ae_dense = nn.Linear(self.num_base_features, hidden_units[1])
-        self.x_ae_norm = nn.BatchNorm1d(hidden_units[1])
+        # ae
+        self.x_ae_dense = nn.Linear(self.num_base_features, 96)
+        self.x_ae_norm = nn.BatchNorm1d(96)
         self.x_ae_activation = nn.SiLU()
-        self.x_ae_dropout = nn.Dropout(dropout_rates[2])
+        self.x_ae_dropout = nn.Dropout(0.424)
 
         # out_ae (1次元)
-        self.out_ae_dense = nn.Linear(hidden_units[1], 1)
+        self.out_ae_dense = nn.Linear(96, 1)
 
-        # ----------------------------------------------------
-        # x0 + Encoder concat
-        # ----------------------------------------------------
-        concat_dim = self.all_input_dim + hidden_units[0]
+        # x0 + encoder
+        concat_dim = self.all_input_dim + 96
         self.concat_norm = nn.BatchNorm1d(concat_dim)
-        self.concat_dropout = nn.Dropout(dropout_rates[3])
+        self.concat_dropout = nn.Dropout(0.100)
 
-        # additional hidden layers
-        self.hidden_layers = []
-        prev_dim = concat_dim
-        for i in range(2, len(hidden_units)):
-            self.hidden_layers.extend(
-                [
-                    nn.Linear(prev_dim, hidden_units[i]),
-                    nn.BatchNorm1d(hidden_units[i]),
-                    nn.SiLU(),
-                    nn.Dropout(dropout_rates[i + 2]),
-                ]
-            )
-            prev_dim = hidden_units[i]
-        self.hidden_layers = nn.Sequential(*self.hidden_layers)
+        # mlp
+        self.mlp = nn.Sequential(
+            # 1層目
+            nn.Linear(concat_dim, 896),
+            nn.BatchNorm1d(896),
+            nn.SiLU(),
+            nn.Dropout(0.50),
+            # 2層目
+            nn.Linear(896, 448),
+            nn.BatchNorm1d(448),
+            nn.SiLU(),
+            nn.Dropout(0.30),
+            # 3層目
+            nn.Linear(448, 448),
+            nn.BatchNorm1d(448),
+            nn.SiLU(),
+            nn.Dropout(0.30),
+            # 4層目
+            nn.Linear(448, 256),
+            nn.BatchNorm1d(256),
+            nn.SiLU(),
+            nn.Dropout(0.40),
+        )
 
         # 最終 out (1次元)
-        self.out_dense = nn.Linear(prev_dim, 1)
+        self.out_dense = nn.Linear(256, 1)
 
     def forward(self, x_feature, x_lag, x_category, x_date):
         """
-        x_feature:  (batch_size, num_features)       [float]
-        x_lag:      (batch_size, num_lag_features)   [float]
-        x_category: (batch_size,) or (batch_size, 1) [int → embedding index]
-        x_date:     (batch_size,) or (batch_size, 1) [int → embedding index]
+        Args:
+            x_feature
+            x_lag
+            x_category
+            x_date
         """
-        # 1) 数値部
-        x_num = torch.cat([x_feature, x_lag], dim=1)  # (batch_size, num_base_features)
+        x_num = torch.cat([x_feature, x_lag], dim=1)
 
-        # 2) カテゴリ埋め込み
-        #    x_category: (batch_size,) (int)
-        cat_embed = self.category_embedding(x_category)  # (batch_size, cat_emb_dim)
+        cat_embed = self.category_embedding(x_category)
+        date_embed = self.date_embedding(x_date)
 
-        # 3) 日付埋め込み
-        date_embed = self.date_embedding(x_date)  # (batch_size, date_emb_dim)
-
-        # 4) 結合
         x_input = torch.cat([x_num, cat_embed, date_embed], dim=1)
 
         x0 = self.input_norm(x_input)
 
-        # Gaussian Noise (train時のみ)
         if self.training:
             encoder_input = self.noise(x0)
         else:
             encoder_input = x0
 
-        # Encoder
+        # encoder
         encoder = self.encoder_dense(encoder_input)
         encoder = self.encoder_norm(encoder)
         encoder = self.encoder_activation(encoder)
 
-        # Decoder
+        # decoder
         decoder = self.decoder_dropout(encoder)
         decoder = self.decoder_dense(decoder)
 
@@ -210,7 +191,8 @@ class SupervisedAutoEncoder(nn.Module):
         x_concat = self.concat_norm(x_concat)
         x_concat = self.concat_dropout(x_concat)
 
-        x_hidden = self.hidden_layers(x_concat)
+        # mlp
+        x_hidden = self.mlp(x_concat)
 
         out = self.out_dense(x_hidden)
 

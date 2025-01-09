@@ -15,4 +15,4 @@ train_batch_size: 8192
 valid_batch_size: 8192
 lr: 1e-4
 num_accumulates: 1
-early_stopping_steps: 5
+early_stopping_steps: 2

@@ -218,7 +218,7 @@ class SimpleSupervisedAutoEncoder(nn.Module):
         self.encoder_activation = nn.SiLU()  # Swish
 
         # decoder
-        self.decoder_dropout = nn.Dropout(0.200)
+        self.decoder_dropout = nn.Dropout(0.038)
         self.decoder_dense = nn.Linear(96, num_all_features)
 
         # ae
@@ -241,22 +241,22 @@ class SimpleSupervisedAutoEncoder(nn.Module):
             nn.Linear(concat_dim, 896),
             nn.BatchNorm1d(896),
             nn.SiLU(),
-            nn.Dropout(0.50),
+            nn.Dropout(0.49),
             # 2層目
             nn.Linear(896, 448),
             nn.BatchNorm1d(448),
             nn.SiLU(),
-            nn.Dropout(0.30),
+            nn.Dropout(0.32),
             # 3層目
             nn.Linear(448, 448),
             nn.BatchNorm1d(448),
             nn.SiLU(),
-            nn.Dropout(0.30),
+            nn.Dropout(0.27),
             # 4層目
             nn.Linear(448, 256),
             nn.BatchNorm1d(256),
             nn.SiLU(),
-            nn.Dropout(0.40),
+            nn.Dropout(0.44),
         )
 
         # 最終 out (1次元)
@@ -288,7 +288,7 @@ class SimpleSupervisedAutoEncoder(nn.Module):
 
         # x_ae
         x_ae = self.x_ae_dense(decoder)
-        x_ae = self.x_ae_norm(x_ae)
+        # x_ae = self.x_ae_norm(x_ae)
         x_ae = self.x_ae_activation(x_ae)
         x_ae = self.x_ae_dropout(x_ae)
 

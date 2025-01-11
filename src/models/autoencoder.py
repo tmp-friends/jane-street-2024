@@ -288,7 +288,7 @@ class SimpleSupervisedAutoEncoder(nn.Module):
 
         # x_ae
         x_ae = self.x_ae_dense(decoder)
-        # x_ae = self.x_ae_norm(x_ae)
+        x_ae = self.x_ae_norm(x_ae)
         x_ae = self.x_ae_activation(x_ae)
         x_ae = self.x_ae_dropout(x_ae)
 

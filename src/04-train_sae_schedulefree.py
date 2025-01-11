@@ -391,6 +391,8 @@ if __name__ == "__main__":
     # Set GPU device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    set_seed()
+    seed = 842
+    set_seed(seed=seed)
+    LOGGER.info(f"{seed=}")
 
     main()

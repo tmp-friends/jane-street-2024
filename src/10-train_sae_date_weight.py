@@ -82,8 +82,8 @@ def train_one_epoch(
         loss_out_ae = criterion_ae(out_ae, y)  # (batch_size,)
         loss = criterion(out, y)  # (batch_size,)
 
-        # date_id の最大値が 968 くらいなので、最大4倍くらい
-        alpha = 5e-3
+        # date_id の最大値が 968 くらいなので、最大2倍くらい
+        alpha = 1e-3
         date_factor = 1.0 + alpha * x_date
         weight = weight * date_factor
 

@@ -20,3 +20,4 @@ wandb
 .venv
 input
 output
+multirun

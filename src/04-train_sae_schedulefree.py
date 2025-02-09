@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import sys
@@ -206,6 +207,9 @@ def main(cfg: TrainConfig):
     """
     ref: Neural Network Starter Pytorch Version (https://www.kaggle.com/code/a763337092/neural-network-starter-pytorch-version)
     """
+    LOGGER.info(f"{cfg.seed=}")
+    set_seed(seed=cfg.seed)
+
     #####################
     # Load data
     #####################
@@ -390,9 +394,5 @@ if __name__ == "__main__":
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     # Set GPU device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    seed = 842
-    set_seed(seed=seed)
-    LOGGER.info(f"{seed=}")
 
     main()
